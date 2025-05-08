@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Helper function to format data size with appropriate unit
 function formatDataSize(sizeInTB) {
+  // Ensure we have a valid number
+  sizeInTB = parseFloat(sizeInTB) || 0;
+  
   if (sizeInTB >= 0.1) {
     // Keep as TB if >= 0.1 TB
     return sizeInTB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TB";
@@ -77,6 +80,78 @@ function refreshData() {
   });
 }
 
+// Format very small percentages appropriately
+function formatSmallPercentage(percentage) {
+  // Ensure we have a valid number
+  percentage = parseFloat(percentage) || 0;
+  
+  if (percentage < 0.0001) {
+    // For extremely small percentages, use ppm (parts per million)
+    return (percentage * 1000000).toFixed(2) + " ppm";
+  } else if (percentage < 0.01) {
+    // For small percentages, use basis points (1 bp = 0.01%)
+    return (percentage * 100).toFixed(2) + " bp";
+  } else {
+    // Normal percentage display
+    return percentage.toFixed(4) + "%";
+  }
+}
+
+// Create a visual scale to represent comparison between two percentages
+function createComparisonScale(value1, value2) {
+  // Ensure we have valid numbers
+  value1 = parseFloat(value1) || 0.0001; // Default to a small value if invalid
+  value2 = parseFloat(value2) || 0.0001;
+  
+  const container = document.createElement('div');
+  container.className = 'scale-container';
+  
+  // Create logarithmic scale for better visualization of small differences
+  const logValue1 = value1 > 0 ? Math.log10(value1) : -6; // minimum log value for 0
+  const logValue2 = value2 > 0 ? Math.log10(value2) : -6;
+  
+  // Normalize to 0-100 scale for display
+  const minLog = -6; // 0.000001%
+  const maxLog = 2;  // 100%
+  const range = maxLog - minLog;
+  
+  const normValue1 = ((logValue1 - minLog) / range) * 100;
+  const normValue2 = ((logValue2 - minLog) / range) * 100;
+  
+  // Create scale
+  const scale = document.createElement('div');
+  scale.className = 'log-scale';
+  
+  // Marker for first value
+  const marker1 = document.createElement('div');
+  marker1.className = 'scale-marker marker1';
+  marker1.style.left = normValue1 + '%';
+  marker1.title = value1.toFixed(6) + '%';
+  
+  // Marker for second value
+  const marker2 = document.createElement('div');
+  marker2.className = 'scale-marker marker2';
+  marker2.style.left = normValue2 + '%';
+  marker2.title = value2.toFixed(6) + '%';
+  
+  // Labels
+  const label1 = document.createElement('div');
+  label1.className = 'scale-label';
+  label1.textContent = 'Points: ' + formatSmallPercentage(value1);
+  
+  const label2 = document.createElement('div');
+  label2.className = 'scale-label';
+  label2.textContent = 'Upload: ' + formatSmallPercentage(value2);
+  
+  scale.appendChild(marker1);
+  scale.appendChild(marker2);
+  container.appendChild(scale);
+  container.appendChild(label1);
+  container.appendChild(label2);
+  
+  return container;
+}
+
 // Update the efficiency results section with improved layout
 function updateEfficiencyResults(efficiencyResultsJson, totalBonus, totalSurplus) {
   const efficiencyResultsDiv = document.getElementById('efficiencyResults');
@@ -93,9 +168,10 @@ function updateEfficiencyResults(efficiencyResultsJson, totalBonus, totalSurplus
   }
   
   try {
+    console.log('Parsing results:', efficiencyResultsJson);
     const results = JSON.parse(efficiencyResultsJson);
     
-    if (results.length === 0) {
+    if (!Array.isArray(results) || results.length === 0) {
       efficiencyStatusDiv.textContent = 
         "No torrent buttons found to analyze. Please visit the seeding required page.";
       return;
@@ -132,27 +208,52 @@ function updateEfficiencyResults(efficiencyResultsJson, totalBonus, totalSurplus
       title.textContent = result.torrentName || `Torrent ${i + 1}`;
       resultItem.appendChild(title);
       
+      // Ensure we have valid numbers for all calculations
+      const pointsPercentage = parseFloat(result.pointsPercentage) || 0.0001;
+      const surplusPercentage = parseFloat(result.surplusPercentage) || 0.0001;
+      
+      // Calculate efficiency ratios if they don't exist
+      let efficiencyRatio = 1;
+      let inverseEfficiencyRatio = 1;
+      
+      if (pointsPercentage > 0 && surplusPercentage > 0) {
+        efficiencyRatio = result.efficiencyRatio || (surplusPercentage / pointsPercentage);
+        inverseEfficiencyRatio = result.inverseEfficiencyRatio || (pointsPercentage / surplusPercentage);
+      }
+      
       // Determine which option is more efficient
-      const moreEfficient = result.pointsPercentage < result.surplusPercentage ? 'points' : 'surplus';
+      const moreEfficient = pointsPercentage < surplusPercentage ? 'points' : 'surplus';
       
       // Container for the comparison
       const comparisonContainer = document.createElement('div');
       comparisonContainer.className = 'comparison-container';
+      
+      // Format percentages appropriately based on their size
+      const pointsPercentageFormatted = formatSmallPercentage(pointsPercentage);
+      const surplusPercentageFormatted = formatSmallPercentage(surplusPercentage);
       
       // Points option
       const pointsOption = document.createElement('div');
       pointsOption.className = 'option-row ' + (moreEfficient === 'points' ? 'winner' : 'loser');
       pointsOption.innerHTML = `
         <div class="option-details">
-          <span class="points">Points: ${result.pointsValue.toLocaleString()}</span>
-          <span>${result.pointsPercentage.toFixed(4)}%</span>
+          <span class="points">Points: ${(parseFloat(result.pointsValue) || 0).toLocaleString()}</span>
+          <span>${pointsPercentageFormatted}</span>
         </div>
       `;
       
-      // VS label
+      // VS label with efficiency ratio
       const vsLabel = document.createElement('div');
       vsLabel.className = 'vs-label';
-      vsLabel.textContent = 'VS';
+      
+      // Add the relative efficiency information
+      const efficiencyMultiplier = moreEfficient === 'points' ? 
+          efficiencyRatio : inverseEfficiencyRatio;
+      
+      vsLabel.innerHTML = `
+        <div>VS</div>
+        <div class="efficiency-ratio">${efficiencyMultiplier.toFixed(2)}x</div>
+      `;
       
       // Surplus option with appropriate units
       const surplusFormatted = formatDataSize(result.surplusValue);
@@ -161,7 +262,7 @@ function updateEfficiencyResults(efficiencyResultsJson, totalBonus, totalSurplus
       surplusOption.innerHTML = `
         <div class="option-details">
           <span class="surplus">Upload: ${surplusFormatted}</span>
-          <span>${result.surplusPercentage.toFixed(4)}%</span>
+          <span>${surplusPercentageFormatted}</span>
         </div>
       `;
       
@@ -184,16 +285,25 @@ function updateEfficiencyResults(efficiencyResultsJson, totalBonus, totalSurplus
       comparisonContainer.appendChild(surplusOption);
       resultItem.appendChild(comparisonContainer);
       
-      // Add recommendation text
+      // Add visual comparison scale (logarithmic)
+      try {
+        const scaleContainer = createComparisonScale(pointsPercentage, surplusPercentage);
+        resultItem.appendChild(scaleContainer);
+      } catch (scaleError) {
+        console.error("Error creating scale:", scaleError);
+        // If scale creation fails, continue without it
+      }
+      
+      // Add recommendation text with more detailed info
       const recommendation = document.createElement('div');
       recommendation.className = 'small-text';
       recommendation.style.marginTop = '8px';
       recommendation.style.textAlign = 'center';
       
       if (moreEfficient === 'points') {
-        recommendation.innerHTML = `<strong>Recommendation:</strong> Use Points (uses less of your total)`;
+        recommendation.innerHTML = `<strong>Recommendation:</strong> Use Points (${efficiencyMultiplier.toFixed(2)}x more efficient)`;
       } else {
-        recommendation.innerHTML = `<strong>Recommendation:</strong> Use Upload (uses less of your total)`;
+        recommendation.innerHTML = `<strong>Recommendation:</strong> Use Upload (${efficiencyMultiplier.toFixed(2)}x more efficient)`;
       }
       
       resultItem.appendChild(recommendation);
@@ -214,6 +324,18 @@ function updateEfficiencyResults(efficiencyResultsJson, totalBonus, totalSurplus
     
   } catch (error) {
     console.error("Error parsing efficiency results:", error);
-    efficiencyStatusDiv.textContent = "Error displaying efficiency data.";
+    console.error("JSON data that caused error:", efficiencyResultsJson);
+    efficiencyStatusDiv.textContent = "Error displaying efficiency data: " + error.message;
+    
+    // Attempt to display raw data as a fallback
+    try {
+      const plainResults = document.createElement('div');
+      plainResults.className = 'small-text';
+      plainResults.style.marginTop = '16px';
+      plainResults.textContent = 'Raw data is available but cannot be displayed properly.';
+      efficiencyResultsDiv.appendChild(plainResults);
+    } catch (displayError) {
+      console.error("Even fallback display failed:", displayError);
+    }
   }
 }

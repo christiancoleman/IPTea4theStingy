@@ -71,9 +71,18 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
   let efficiencyResults = [];
   
   // Process each row
+  console.log(`Found ${rows.length} total rows in the table`);
   rows.forEach((row, index) => {
     // Try to find the points and surplus buttons in this row
-    const buttons = row.querySelectorAll('input[type="submit"], button');
+    // Only consider visible buttons (those with text and not hidden by CSS)
+    const allButtons = row.querySelectorAll('input[type="submit"], button');
+    const buttons = Array.from(allButtons).filter(btn => {
+      const style = window.getComputedStyle(btn);
+      const isVisible = style.display !== 'none' && style.visibility !== 'hidden';
+      const hasText = (btn.value || btn.textContent || '').trim().length > 0;
+      return isVisible && hasText;
+    });
+    console.log(`Row ${index}: Found ${buttons.length} buttons`);
     
     // Skip if no buttons found
     if (buttons.length === 0) return;
@@ -100,6 +109,7 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
     
     buttons.forEach(button => {
       const buttonText = button.value || button.textContent;
+      console.log(`Button text: "${buttonText}", type: ${button.tagName}`);
       
       // Look for points button (could be labeled as "points", "bonus", etc.)
       if (buttonText && buttonText.match(/points|bonus/i)) {
@@ -134,11 +144,38 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
     
     // If we found both types of buttons and their values, calculate efficiency
     if (pointsButton && surplusButton && pointsValue !== null && surplusValue !== null) {
+      console.log(`Both buttons found in row ${index} with values: Points=${pointsValue}, Surplus=${surplusValue} TB`);
       processedButtons += 2;
       
       // Calculate percentages of total
       const pointsPercentage = (pointsValue / totalBonus) * 100;
       const surplusPercentage = (surplusValue / totalSurplus) * 100;
+      console.log(`Calculated percentages: Points=${pointsPercentage.toFixed(6)}%, Surplus=${surplusPercentage.toFixed(6)}%`);
+      
+      // Calculate basis points (1 bp = 0.01%) for very small percentages
+      const pointsBasisPoints = pointsPercentage * 100;
+      const surplusBasisPoints = surplusPercentage * 100;
+      
+      // Calculate relative efficiency (how many times more efficient one option is)
+      // Handle division by zero or very small numbers
+      let efficiencyRatio = 1;
+      let inverseEfficiencyRatio = 1;
+      let relativeEfficiency = '';
+      
+      if (pointsPercentage > 0 && surplusPercentage > 0) {
+        efficiencyRatio = surplusPercentage / pointsPercentage;
+        inverseEfficiencyRatio = pointsPercentage / surplusPercentage;
+        // Protect against infinity
+        efficiencyRatio = isFinite(efficiencyRatio) ? efficiencyRatio : 100;
+        inverseEfficiencyRatio = isFinite(inverseEfficiencyRatio) ? inverseEfficiencyRatio : 100;
+        
+        relativeEfficiency = pointsPercentage < surplusPercentage ? 
+          `${efficiencyRatio.toFixed(2)}x more efficient` : 
+          `${inverseEfficiencyRatio.toFixed(2)}x more efficient`;
+      } else {
+        // Safe fallback values if one percentage is zero
+        relativeEfficiency = 'Significantly more efficient';
+      }
       
       console.log("Found buttons:", {
         points: { value: pointsValue, percentage: pointsPercentage.toFixed(4) + "%" },
@@ -154,42 +191,76 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
         pointsValue: pointsValue,
         surplusValue: surplusValue,
         pointsPercentage: pointsPercentage,
-        surplusPercentage: surplusPercentage
+        surplusPercentage: surplusPercentage,
+        pointsBasisPoints: pointsBasisPoints,
+        surplusBasisPoints: surplusBasisPoints,
+        efficiencyRatio: efficiencyRatio,
+        inverseEfficiencyRatio: inverseEfficiencyRatio,
+        relativeEfficiency: relativeEfficiency
       });
       
       // Determine which button is more efficient
       if (pointsPercentage < surplusPercentage) {
         // Points button is more efficient (uses less of total)
-        highlightButton(pointsButton, 'efficient', 
-          `Efficient: ${pointsPercentage.toFixed(2)}% of your points vs ${surplusPercentage.toFixed(2)}% of your surplus`);
+        let tooltipText = '';
+        // For very small percentages, use basis points
+        if (pointsPercentage < 0.01) {
+          tooltipText = `Efficient: ${pointsBasisPoints.toFixed(2)} basis points (${pointsPercentage.toFixed(6)}%) vs ${surplusBasisPoints.toFixed(2)} basis points`;
+        } else {
+          tooltipText = `Efficient: ${pointsPercentage.toFixed(4)}% of your points vs ${surplusPercentage.toFixed(4)}% of your surplus`;
+        }
+        tooltipText += `\n${efficiencyRatio.toFixed(2)}x more efficient than upload option`;
+        
+        highlightButton(pointsButton, 'efficient', tooltipText);
         highlightButton(surplusButton, 'inefficient', 
-          `Less efficient: ${surplusPercentage.toFixed(2)}% of your surplus vs ${pointsPercentage.toFixed(2)}% of your points`);
+          `Less efficient: ${surplusPercentage.toFixed(4)}% of your surplus vs ${pointsPercentage.toFixed(4)}% of your points`);
       } else if (surplusPercentage < pointsPercentage) {
         // Surplus button is more efficient
-        highlightButton(surplusButton, 'efficient', 
-          `Efficient: ${surplusPercentage.toFixed(2)}% of your surplus vs ${pointsPercentage.toFixed(2)}% of your points`);
+        let tooltipText = '';
+        // For very small percentages, use basis points
+        if (surplusPercentage < 0.01) {
+          tooltipText = `Efficient: ${surplusBasisPoints.toFixed(2)} basis points (${surplusPercentage.toFixed(6)}%) vs ${pointsBasisPoints.toFixed(2)} basis points`;
+        } else {
+          tooltipText = `Efficient: ${surplusPercentage.toFixed(4)}% of your surplus vs ${pointsPercentage.toFixed(4)}% of your points`;
+        }
+        tooltipText += `\n${inverseEfficiencyRatio.toFixed(2)}x more efficient than points option`;
+        
+        highlightButton(surplusButton, 'efficient', tooltipText);
         highlightButton(pointsButton, 'inefficient', 
-          `Less efficient: ${pointsPercentage.toFixed(2)}% of your points vs ${surplusPercentage.toFixed(2)}% of your surplus`);
+          `Less efficient: ${pointsPercentage.toFixed(4)}% of your points vs ${surplusPercentage.toFixed(4)}% of your surplus`);
       } else {
         // Both are equally efficient
-        highlightButton(pointsButton, 'neutral', `Equal efficiency: ${pointsPercentage.toFixed(2)}%`);
-        highlightButton(surplusButton, 'neutral', `Equal efficiency: ${surplusPercentage.toFixed(2)}%`);
+        highlightButton(pointsButton, 'neutral', `Equal efficiency: ${pointsPercentage.toFixed(4)}%`);
+        highlightButton(surplusButton, 'neutral', `Equal efficiency: ${surplusPercentage.toFixed(4)}%`);
       }
     }
   });
   
   console.log(`Processed ${processedButtons} buttons on the page`);
   
+  // Store the results - ensure all values are serializable
+  const serializedResults = efficiencyResults.map(result => {
+    // Clean up values to ensure they're serializable
+    return {
+      torrentName: result.torrentName || 'Unknown Torrent',
+      pointsValue: isFinite(result.pointsValue) ? result.pointsValue : 0,
+      surplusValue: isFinite(result.surplusValue) ? result.surplusValue : 0,
+      pointsPercentage: isFinite(result.pointsPercentage) ? result.pointsPercentage : 0,
+      surplusPercentage: isFinite(result.surplusPercentage) ? result.surplusPercentage : 0,
+      pointsBasisPoints: isFinite(result.pointsBasisPoints) ? result.pointsBasisPoints : 0,
+      surplusBasisPoints: isFinite(result.surplusBasisPoints) ? result.surplusBasisPoints : 0,
+      efficiencyRatio: isFinite(result.efficiencyRatio) ? result.efficiencyRatio : 1,
+      inverseEfficiencyRatio: isFinite(result.inverseEfficiencyRatio) ? result.inverseEfficiencyRatio : 1,
+      relativeEfficiency: result.relativeEfficiency || 'More efficient',
+      moreEfficient: result.pointsPercentage < result.surplusPercentage ? 'points' : 'surplus'
+    };
+  });
+  
+  console.log('Serialized results before storage:', serializedResults);
+  
   // Store the results
   chrome.storage.local.set({
-    efficiencyResults: JSON.stringify(efficiencyResults.map(result => ({
-      torrentName: result.torrentName,
-      pointsValue: result.pointsValue,
-      surplusValue: result.surplusValue,
-      pointsPercentage: result.pointsPercentage,
-      surplusPercentage: result.surplusPercentage,
-      moreEfficient: result.pointsPercentage < result.surplusPercentage ? 'points' : 'surplus'
-    })))
+    efficiencyResults: JSON.stringify(serializedResults)
   });
   
   return efficiencyResults;

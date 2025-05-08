@@ -85,10 +85,66 @@
       font-size: 11px;
       color: #555;
       margin: 0 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .efficiency-ratio {
+      font-weight: bold;
+      font-size: 10px;
+      margin-top: 2px;
+      color: #4caf50;
     }
     .small-text {
       font-size: 12px;
       color: #666;
+    }
+    
+    /* Logarithmic scale visualization */
+    .scale-container {
+      margin: 12px 0;
+      padding: 8px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+    }
+    
+    .log-scale {
+      height: 8px;
+      background: linear-gradient(to right, #e0f7fa, #b2ebf2, #80deea, #4dd0e1, #26c6da, #00bcd4, #00acc1, #0097a7);
+      position: relative;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    
+    .scale-marker {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #fff;
+      border: 2px solid #333;
+      transform: translate(-50%, -25%);
+      cursor: help;
+    }
+    
+    .marker1 {
+      border-color: #4285f4;
+      z-index: 2;
+    }
+    
+    .marker2 {
+      border-color: #34a853;
+      z-index: 1;
+    }
+    
+    .scale-label {
+      font-size: 11px;
+      margin-bottom: 4px;
+      color: #555;
+      display: flex;
+      justify-content: space-between;
     }
     .option-row {
       display: flex;
