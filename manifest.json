@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "IPTea4theStingy",
+  "version": "1.0",
+  "description": "Parse information from IPTorrents seeding required page (works on all Chromium browsers)",
+  "permissions": ["scripting", "activeTab", "storage"],
+  "host_permissions": ["https://iptorrents.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon16.svg",
+      "48": "images/icon48.svg",
+      "128": "images/icon128.svg"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://iptorrents.com/seeding_required.php"],
+      "js": ["content.js"]
+    }
+  ]
+}

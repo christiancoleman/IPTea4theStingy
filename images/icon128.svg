@@ -1,0 +1,38 @@
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="128" height="128" fill="#3F5878" rx="19.2" ry="19.2" />
+    
+    <!-- Triforce -->
+    <!-- Top Triangle -->
+    <polygon 
+      points="64,12.8 38.4,57.1392 89.6,57.1392" 
+      fill="#FFC940" 
+      stroke="#FFD573" 
+      stroke-width="2.56" />
+    
+    <!-- Bottom Left Triangle -->
+    <polygon 
+      points="38.4,57.1392 12.799999999999997,101.47840000000001 64,101.47840000000001" 
+      fill="#FFC940" 
+      stroke="#FFD573" 
+      stroke-width="2.56" />
+    
+    <!-- Bottom Right Triangle -->
+    <polygon 
+      points="89.6,57.1392 64,101.47840000000001 115.2,101.47840000000001" 
+      fill="#FFC940" 
+      stroke="#FFD573" 
+      stroke-width="2.56" />
+      
+    <!-- Text below the triforce -->
+    <text 
+      x="64" 
+      y="108.8" 
+      font-family="Arial, sans-serif" 
+      font-size="19.2" 
+      font-weight="bold"
+      fill="white" 
+      text-anchor="middle">
+      IPTea
+    </text>
+  </svg>
