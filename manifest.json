@@ -5,12 +5,17 @@
   "description": "Parse information from IPTorrents seeding required page (works on all Chromium browsers)",
   "permissions": ["scripting", "activeTab", "storage"],
   "host_permissions": ["https://iptorrents.com/*"],
+  "icons": {
+  "16": "icon16.png",
+  "48": "icon48.png",
+  "128": "icon128.png"
+},
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "images/icon16.svg",
-      "48": "images/icon48.svg",
-      "128": "images/icon128.svg"
+      "16": "icon16.png", 
+      "48": "icon48.png",
+      "128": "icon128.png"
     }
   },
   "background": {

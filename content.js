@@ -63,15 +63,77 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
   console.log("Total Bonus:", totalBonus);
   console.log("Total Surplus:", totalSurplus);
   
-  // Find all the rows in the table
-  const rows = document.querySelectorAll('tr');
+  // Find only the rows in the actual torrents table - be more specific
+  // Look for the torrent table using more traditional methods
+  let rows = [];
+  let torrentTable = null;
+  
+  // First approach: find table with the Seeding Time header
+  const allTables = document.querySelectorAll('table');
+  for (let table of allTables) {
+    const headerRow = table.querySelector('tr');
+    if (headerRow && headerRow.textContent.includes('Seeding Time')) {
+      torrentTable = table;
+      console.log('Found torrent table by header text');
+      break;
+    }
+  }
+  
+  if (torrentTable) {
+    // Skip the header row(s) by starting from index 1
+    rows = Array.from(torrentTable.querySelectorAll('tr')).slice(1);
+    console.log(`Found actual torrent table with ${rows.length} data rows`);
+  } else {
+    // Second approach: look for table with the torrents list heading
+    const headingElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, div.heading');
+    for (let heading of headingElements) {
+      if (heading.textContent.toLowerCase().includes('torrents list') || 
+          heading.textContent.toLowerCase().includes('seeding required')) {
+        // Look for the next table after this heading
+        let nextElement = heading.nextElementSibling;
+        while (nextElement && nextElement.tagName !== 'TABLE') {
+          nextElement = nextElement.nextElementSibling;
+        }
+        if (nextElement && nextElement.tagName === 'TABLE') {
+          torrentTable = nextElement;
+          rows = Array.from(torrentTable.querySelectorAll('tr')).slice(1); // Skip header
+          console.log('Found torrent table by section heading');
+          break;
+        }
+      }
+    }
+  }
+  
+  // Fallback: Filter rows that look like torrent entries
+  if (rows.length === 0) {
+    rows = Array.from(document.querySelectorAll('tr')).filter(row => {
+      // Check if row has cells that indicate it's a torrent row
+      const cells = row.querySelectorAll('td');
+      if (cells.length < 5) return false; // Torrent rows typically have several columns
+      
+      // Look for MB or GB text and hours text in the same row
+      const rowText = row.textContent.toLowerCase();
+      const hasSizeInfo = rowText.includes('mb') || rowText.includes('gb') || rowText.includes('tb');
+      const hasTimeInfo = rowText.includes('hours') || rowText.includes('mins');
+      
+      // Look for specific cell patterns that indicate a torrent row
+      // Such as cells containing only numeric values + size units
+      const hasSizeCell = Array.from(cells).some(cell => {
+        const text = cell.textContent.trim();
+        return text.match(/^\d+(\.\d+)? (MB|GB|TB)$/i);
+      });
+      
+      return (hasSizeInfo && hasTimeInfo) || hasSizeCell;
+    });
+    console.log(`Fallback method found ${rows.length} potential torrent rows`);
+  }
   
   // Results tracking
   let processedButtons = 0;
   let efficiencyResults = [];
   
   // Process each row
-  console.log(`Found ${rows.length} total rows in the table`);
+  console.log(`Found ${rows.length} total rows in the torrent table`);
   rows.forEach((row, index) => {
     // Try to find the points and surplus buttons in this row
     // Only consider visible buttons (those with text and not hidden by CSS)
