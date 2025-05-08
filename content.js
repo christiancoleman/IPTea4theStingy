@@ -71,12 +71,26 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
   let efficiencyResults = [];
   
   // Process each row
-  rows.forEach(row => {
+  rows.forEach((row, index) => {
     // Try to find the points and surplus buttons in this row
     const buttons = row.querySelectorAll('input[type="submit"], button');
     
     // Skip if no buttons found
     if (buttons.length === 0) return;
+    
+    // Try to extract the torrent name if available (for better identification)
+    let torrentName = `Torrent Option ${index + 1}`;
+    const nameCell = row.querySelector('td:nth-child(1)');
+    if (nameCell) {
+      const nameText = nameCell.textContent.trim();
+      if (nameText && nameText.length > 0) {
+        torrentName = nameText;
+        // Limit length of torrent name to avoid UI issues
+        if (torrentName.length > 40) {
+          torrentName = torrentName.substring(0, 37) + '...';
+        }
+      }
+    }
     
     // Try to extract the point and surplus values from the buttons
     let pointsButton = null;
@@ -97,18 +111,23 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
         }
       }
       
-      // Look for surplus button (could be labeled as "upload", "credit", "GB", "TB", etc.)
-      if (buttonText && buttonText.match(/upload|credit|gb|tb/i)) {
+      // Look for surplus button (could be labeled as "upload", "credit", "GB", "TB", "MB", etc.)
+      if (buttonText && buttonText.match(/upload|credit|gb|tb|mb/i)) {
         surplusButton = button;
         // Try to extract the number from the button text or surrounding elements
-        const surplusMatch = buttonText.match(/(\d+[,\d]*\.?\d*)/);
+        const surplusMatch = buttonText.match(/(\d+[,\d]*\.?\d*)/i);
         if (surplusMatch) {
           surplusValue = parseFloat(surplusMatch[1].replace(/,/g, ''));
           
-          // Check if there's a unit (GB vs TB) and convert if needed
-          if (buttonText.includes('GB')) {
+          // Check if there's a unit and convert to TB for consistent comparison
+          if (buttonText.match(/\bMB\b/i)) {
+            surplusValue = surplusValue / (1024 * 1024); // Convert MB to TB
+            console.log(`Converting ${surplusMatch[1]} MB to ${surplusValue} TB`);
+          } else if (buttonText.match(/\bGB\b/i)) {
             surplusValue = surplusValue / 1024; // Convert GB to TB
+            console.log(`Converting ${surplusMatch[1]} GB to ${surplusValue} TB`);
           }
+          // If it's already TB or no unit specified, keep as is
         }
       }
     });
@@ -129,6 +148,7 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
       // Store the results
       efficiencyResults.push({
         row: row,
+        torrentName: torrentName,
         pointsButton: pointsButton,
         surplusButton: surplusButton,
         pointsValue: pointsValue,
@@ -163,6 +183,7 @@ function analyzeButtonEfficiency(totalBonus, totalSurplus) {
   // Store the results
   chrome.storage.local.set({
     efficiencyResults: JSON.stringify(efficiencyResults.map(result => ({
+      torrentName: result.torrentName,
       pointsValue: result.pointsValue,
       surplusValue: result.surplusValue,
       pointsPercentage: result.pointsPercentage,

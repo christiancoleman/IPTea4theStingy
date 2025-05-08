@@ -7,11 +7,29 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
+// Helper function to format data size with appropriate unit
+function formatDataSize(sizeInTB) {
+  if (sizeInTB >= 0.1) {
+    // Keep as TB if >= 0.1 TB
+    return sizeInTB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TB";
+  } else if (sizeInTB >= 0.0001) {
+    // Convert to GB if between 0.1 TB and 0.0001 TB
+    const sizeInGB = sizeInTB * 1024;
+    return sizeInGB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " GB";
+  } else {
+    // Convert to MB for very small values
+    const sizeInMB = sizeInTB * 1024 * 1024;
+    return sizeInMB.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " MB";
+  }
+}
+
 // Load stored data and display it
 function loadData() {
   chrome.storage.local.get([
     'currentBonusDisplay', 
     'surplusUploadDisplay', 
+    'currentBonusValue',
+    'surplusUploadValue',
     'efficiencyResults', 
     'lastUpdated'
   ], function(result) {
@@ -25,7 +43,7 @@ function loadData() {
     }
     
     // Update efficiency results if available
-    updateEfficiencyResults(result.efficiencyResults);
+    updateEfficiencyResults(result.efficiencyResults, result.currentBonusValue, result.surplusUploadValue);
   });
 }
 
@@ -41,8 +59,8 @@ function refreshData() {
           
           // Re-check efficiency after a short delay to allow for data processing
           setTimeout(() => {
-            chrome.storage.local.get(['efficiencyResults'], function(result) {
-              updateEfficiencyResults(result.efficiencyResults);
+            chrome.storage.local.get(['efficiencyResults', 'currentBonusValue', 'surplusUploadValue'], function(result) {
+              updateEfficiencyResults(result.efficiencyResults, result.currentBonusValue, result.surplusUploadValue);
             });
           }, 500);
         } else {
@@ -59,8 +77,8 @@ function refreshData() {
   });
 }
 
-// Update the efficiency results section
-function updateEfficiencyResults(efficiencyResultsJson) {
+// Update the efficiency results section with improved layout
+function updateEfficiencyResults(efficiencyResultsJson, totalBonus, totalSurplus) {
   const efficiencyResultsDiv = document.getElementById('efficiencyResults');
   const efficiencyStatusDiv = document.getElementById('efficiencyStatus');
   
@@ -83,75 +101,114 @@ function updateEfficiencyResults(efficiencyResultsJson) {
       return;
     }
     
-    // We have results, update the status
-    efficiencyStatusDiv.textContent = 
-      `Found ${results.length} torrent options to analyze. Green border indicates the more efficient option.`;
+    // De-duplicate torrents by name (in case there are multiple rows with the same name)
+    const uniqueTorrents = [];
+    const uniqueTorrentNames = new Set();
     
-    // Display up to 5 results
-    const maxDisplay = Math.min(5, results.length);
+    results.forEach(result => {
+      if (!uniqueTorrentNames.has(result.torrentName)) {
+        uniqueTorrentNames.add(result.torrentName);
+        uniqueTorrents.push(result);
+      }
+    });
+    
+    // Update the status with the count of unique torrents
+    efficiencyStatusDiv.textContent = 
+      `Found ${uniqueTorrents.length} torrent${uniqueTorrents.length === 1 ? '' : 's'} to analyze.`;
+    
+    // Display up to 5 unique results
+    const maxDisplay = Math.min(5, uniqueTorrents.length);
     
     for (let i = 0; i < maxDisplay; i++) {
-      const result = results[i];
+      const result = uniqueTorrents[i];
       
-      // Create a result item
+      // Create a result item with improved layout
       const resultItem = document.createElement('div');
       resultItem.className = 'efficiency-item';
       
-      // Add item content
-      const header = document.createElement('div');
-      header.className = 'efficiency-header';
+      // Add torrent title/identifier
+      const title = document.createElement('div');
+      title.className = 'torrent-title';
+      title.textContent = result.torrentName || `Torrent ${i + 1}`;
+      resultItem.appendChild(title);
       
-      // More efficient indicator
-      const moreEfficient = result.moreEfficient;
+      // Determine which option is more efficient
+      const moreEfficient = result.pointsPercentage < result.surplusPercentage ? 'points' : 'surplus';
       
-      // Create points row
-      const pointsRow = document.createElement('div');
-      pointsRow.className = 'option-row';
-      pointsRow.innerHTML = `
-        <span class="points">Points: ${result.pointsValue.toLocaleString()}</span>
-        <span>${result.pointsPercentage.toFixed(4)}% of total</span>
+      // Container for the comparison
+      const comparisonContainer = document.createElement('div');
+      comparisonContainer.className = 'comparison-container';
+      
+      // Points option
+      const pointsOption = document.createElement('div');
+      pointsOption.className = 'option-row ' + (moreEfficient === 'points' ? 'winner' : 'loser');
+      pointsOption.innerHTML = `
+        <div class="option-details">
+          <span class="points">Points: ${result.pointsValue.toLocaleString()}</span>
+          <span>${result.pointsPercentage.toFixed(4)}%</span>
+        </div>
       `;
       
-      // Create surplus row
-      const surplusRow = document.createElement('div');
-      surplusRow.className = 'option-row';
-      surplusRow.innerHTML = `
-        <span class="surplus">Surplus: ${result.surplusValue.toLocaleString()} TB</span>
-        <span>${result.surplusPercentage.toFixed(4)}% of total</span>
+      // VS label
+      const vsLabel = document.createElement('div');
+      vsLabel.className = 'vs-label';
+      vsLabel.textContent = 'VS';
+      
+      // Surplus option with appropriate units
+      const surplusFormatted = formatDataSize(result.surplusValue);
+      const surplusOption = document.createElement('div');
+      surplusOption.className = 'option-row ' + (moreEfficient === 'surplus' ? 'winner' : 'loser');
+      surplusOption.innerHTML = `
+        <div class="option-details">
+          <span class="surplus">Upload: ${surplusFormatted}</span>
+          <span>${result.surplusPercentage.toFixed(4)}%</span>
+        </div>
       `;
       
-      // Recommendation
+      // Add winner indicator
+      if (moreEfficient === 'points') {
+        const badge = document.createElement('div');
+        badge.className = 'option-badge';
+        badge.textContent = 'Better';
+        pointsOption.appendChild(badge);
+      } else {
+        const badge = document.createElement('div');
+        badge.className = 'option-badge';
+        badge.textContent = 'Better';
+        surplusOption.appendChild(badge);
+      }
+      
+      // Add all elements to the comparison container
+      comparisonContainer.appendChild(pointsOption);
+      comparisonContainer.appendChild(vsLabel);
+      comparisonContainer.appendChild(surplusOption);
+      resultItem.appendChild(comparisonContainer);
+      
+      // Add recommendation text
       const recommendation = document.createElement('div');
       recommendation.className = 'small-text';
       recommendation.style.marginTop = '8px';
+      recommendation.style.textAlign = 'center';
       
       if (moreEfficient === 'points') {
-        // Points is more efficient
-        resultItem.classList.add('efficient');
-        recommendation.textContent = 'Recommendation: Use Points (more efficient)';
-        pointsRow.style.fontWeight = 'bold';
+        recommendation.innerHTML = `<strong>Recommendation:</strong> Use Points (uses less of your total)`;
       } else {
-        // Surplus is more efficient
-        resultItem.classList.add('efficient');
-        recommendation.textContent = 'Recommendation: Use Surplus Upload (more efficient)';
-        surplusRow.style.fontWeight = 'bold';
+        recommendation.innerHTML = `<strong>Recommendation:</strong> Use Upload (uses less of your total)`;
       }
       
-      // Add all elements to the result item
-      resultItem.appendChild(pointsRow);
-      resultItem.appendChild(surplusRow);
       resultItem.appendChild(recommendation);
       
       // Add the item to results container
       efficiencyResultsDiv.appendChild(resultItem);
     }
     
-    // If there are more results than we display
-    if (results.length > maxDisplay) {
+    // If there are more unique results than we display
+    if (uniqueTorrents.length > maxDisplay) {
       const moreInfo = document.createElement('div');
       moreInfo.className = 'small-text';
       moreInfo.style.marginTop = '8px';
-      moreInfo.textContent = `+ ${results.length - maxDisplay} more options. View all on the seeding required page.`;
+      moreInfo.style.textAlign = 'center';
+      moreInfo.textContent = `+ ${uniqueTorrents.length - maxDisplay} more torrents. View all on the seeding required page.`;
       efficiencyResultsDiv.appendChild(moreInfo);
     }
     
